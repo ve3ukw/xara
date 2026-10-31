@@ -7,14 +7,17 @@ use std::os::fd::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::sync::{Arc, Condvar, Mutex};
-use std::thread;
-use std::time::Duration;
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
+pub const DEFAULT_ADDR: &str = "127.0.0.1";
+pub const DEFAULT_PORT: u16 = 8300;
 pub const MAX_LINE: usize = 1024;
 pub const DATA_CHUNK: usize = 65536;
 pub const INPUT_QUEUE: usize = 64;
 pub(crate) const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
 const WAKE_TIMEOUT: Duration = Duration::from_millis(100);
+const JOIN_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Debug)]
 pub enum Input {
@@ -70,6 +73,7 @@ pub struct Host {
     clients: Shared,
     hold: Arc<Hold>,
     closed: Arc<AtomicBool>,
+    threads: Vec<JoinHandle<()>>,
     pub cmd_addr: SocketAddr,
     pub data_addr: SocketAddr,
 }
@@ -86,16 +90,17 @@ impl Host {
         let clients = Shared::default();
         let hold = Arc::<Hold>::default();
         let closed = Arc::<AtomicBool>::default();
-        let h = Self {
+        let mut h = Self {
             input,
             clients: clients.clone(),
             hold: hold.clone(),
             closed: closed.clone(),
+            threads: Vec::new(),
             cmd_addr: cl.local_addr()?,
             data_addr: dl.local_addr()?,
         };
-        serve(cl, Port::Cmd, clients.clone(), tx.clone(), hold.clone(), closed.clone())?;
-        serve(dl, Port::Data, clients, tx, hold, closed)?;
+        h.threads.push(serve(cl, Port::Cmd, clients.clone(), tx.clone(), hold.clone(), closed.clone())?);
+        h.threads.push(serve(dl, Port::Data, clients, tx, hold, closed)?);
         Ok(h)
     }
 
@@ -126,16 +131,52 @@ impl Host {
     }
 }
 
-impl Drop for Host {
-    fn drop(&mut self) {
+impl Host {
+    /// Disconnects the clients and waits (bounded) until both ports can be bound again. A plain drop leaves
+    /// connected clients alone and frees the ports when they leave.
+    pub fn close(mut self) {
+        // stop accepting first, so no client attaches after the disconnect below
+        self.stop();
+        let input = &self.input;
+        if !join(&mut self.threads, || while input.try_recv().is_ok() {}) {
+            crate::say(format_args!("host ports {} and {} are still listening", self.cmd_addr, self.data_addr));
+        }
+        let c = self.clients.lock().unwrap_or_else(|e| e.into_inner());
+        c.cmd.iter().chain(&c.data).for_each(Writer::close);
+    }
+
+    fn stop(&self) {
         self.hold.set(false);
-        self.closed.store(true, Ordering::SeqCst);
+        if self.closed.swap(true, Ordering::SeqCst) {
+            return;
+        }
         wake(self.cmd_addr);
         wake(self.data_addr);
     }
 }
 
-fn wake(mut a: SocketAddr) {
+impl Drop for Host {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+// Waits (bounded) for accept threads to drop their listeners, so the ports can be bound again at once. False
+// if one is still running (it is left detached).
+pub(crate) fn join(threads: &mut Vec<JoinHandle<()>>, mut drain: impl FnMut()) -> bool {
+    let until = Instant::now() + JOIN_TIMEOUT;
+    while threads.iter().any(|t| !t.is_finished()) && Instant::now() < until {
+        drain();
+        thread::sleep(Duration::from_millis(1));
+    }
+    let all = threads.iter().all(JoinHandle::is_finished);
+    for t in threads.drain(..).filter(JoinHandle::is_finished) {
+        let _ = t.join();
+    }
+    all
+}
+
+pub(crate) fn wake(mut a: SocketAddr) {
     if a.ip().is_unspecified() {
         a.set_ip(match a.ip() {
             IpAddr::V4(_) => Ipv4Addr::LOCALHOST.into(),
@@ -209,7 +250,7 @@ fn serve(
     tx: SyncSender<Input>,
     hold: Arc<Hold>,
     closed: Arc<AtomicBool>,
-) -> io::Result<()> {
+) -> io::Result<JoinHandle<()>> {
     let name = match port {
         Port::Cmd => "host-cmd-accept",
         Port::Data => "host-data-accept",
@@ -246,8 +287,7 @@ fn serve(
                 return;
             }
         }
-    })?;
-    Ok(())
+    })
 }
 
 fn attach(s: TcpStream, port: Port, clients: &Shared, tx: &SyncSender<Input>, hold: &Hold) -> Result<bool, ()> {

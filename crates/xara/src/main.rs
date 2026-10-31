@@ -83,7 +83,7 @@ fn defaults() -> Args {
         digi: String::new(),
         bw: Bandwidth::Hz2300,
         fm: None,
-        port: 8300,
+        port: xara_host::server::DEFAULT_PORT,
         kiss_port: Some(xara_host::kiss::DEFAULT_PORT),
         persistence: xara_arq::hf::broadcast::DEFAULT_PERSISTENCE,
         addr: xara::DEFAULT_ADDR.into(),

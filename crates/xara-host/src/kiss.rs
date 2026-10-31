@@ -1,6 +1,7 @@
 use crate::writer::Writer;
 use std::io::{self, Read};
 use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -82,6 +83,8 @@ type Clients = Arc<Mutex<Vec<Option<(u64, Writer)>>>>;
 pub struct KissServer {
     pub input: Receiver<(u8, Vec<u8>)>,
     clients: Clients,
+    closed: Arc<AtomicBool>,
+    accept: Vec<thread::JoinHandle<()>>,
     pub addr: SocketAddr,
 }
 
@@ -90,10 +93,13 @@ impl KissServer {
         let l = TcpListener::bind((addr, port))?;
         let (tx, input) = sync_channel(INPUT_QUEUE);
         let clients: Clients = Arc::new(Mutex::new((0..MAX_CLIENTS).map(|_| None).collect()));
-        let s = Self { input, clients: clients.clone(), addr: l.local_addr()? };
-        thread::Builder::new().name("kiss-accept".into()).spawn(move || {
+        let closed = Arc::<AtomicBool>::default();
+        let mut s =
+            Self { input, clients: clients.clone(), closed: closed.clone(), accept: Vec::new(), addr: l.local_addr()? };
+        let t = thread::Builder::new().name("kiss-accept".into()).spawn(move || {
             for id in 0u64..=u64::MAX {
                 let s = match l.accept() {
+                    _ if closed.load(Ordering::SeqCst) => return,
                     Ok((s, _)) => s,
                     Err(_) => {
                         thread::sleep(crate::server::ACCEPT_BACKOFF);
@@ -113,6 +119,7 @@ impl KissServer {
                 }
             }
         })?;
+        s.accept.push(t);
         Ok(s)
     }
 
@@ -125,6 +132,34 @@ impl KissServer {
         for (_, w) in self.clients.lock().unwrap().iter().flatten() {
             w.send(&frame);
         }
+    }
+}
+
+impl KissServer {
+    /// Disconnects the clients as well as freeing the port.
+    pub fn close(mut self) {
+        // stop accepting first, so no client attaches after the disconnect below
+        self.stop();
+        for (_, w) in self.clients.lock().unwrap_or_else(|e| e.into_inner()).iter().flatten() {
+            w.close();
+        }
+    }
+
+    fn stop(&mut self) {
+        if self.closed.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        crate::server::wake(self.addr);
+        if !crate::server::join(&mut self.accept, || {}) {
+            crate::say(format_args!("KISS port {} is still listening", self.addr));
+        }
+    }
+}
+
+// Frees the port (bounded wait); clients stay connected until they leave, as for Host.
+impl Drop for KissServer {
+    fn drop(&mut self) {
+        self.stop();
     }
 }
 

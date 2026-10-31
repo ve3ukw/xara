@@ -17,7 +17,7 @@ pub mod station;
 pub mod tnc;
 pub mod wav;
 
-pub const DEFAULT_ADDR: &str = "127.0.0.1";
+pub const DEFAULT_ADDR: &str = xara_host::server::DEFAULT_ADDR;
 pub const HF_SPAN_HZ: u32 = 3000;
 pub const FM_SPAN_HZ: u32 = 6000;
 
