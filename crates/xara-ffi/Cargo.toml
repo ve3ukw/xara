@@ -1,0 +1,20 @@
+[package]
+name = "xara-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+description = "C ABI for embedding the xara modem in a host application that owns the audio and PTT (e.g. an SDR)."
+
+[lib]
+name = "xara_ffi"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+xara-phy.workspace = true
+xara-arq.workspace = true
+xara-host.workspace = true
+xara-modem.workspace = true

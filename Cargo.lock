@@ -136,6 +136,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "xara-ffi"
+version = "0.1.3"
+dependencies = [
+ "xara-arq",
+ "xara-host",
+ "xara-modem",
+ "xara-phy",
+]
+
+[[package]]
 name = "xara-host"
 version = "0.1.3"
 dependencies = [
