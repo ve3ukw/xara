@@ -13,6 +13,7 @@ description = "A VARA-compatible HF/FM modem and passive monitor for Linux, Free
 xara-phy.workspace = true
 xara-arq.workspace = true
 xara-host.workspace = true
+xara-modem.workspace = true
 xara-ui.workspace = true
 libc.workspace = true
 

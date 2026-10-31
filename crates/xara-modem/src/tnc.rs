@@ -90,6 +90,14 @@ impl<M: Modem> Tnc<M> {
         self.echo = on;
     }
 
+    /// Shuts the host and KISS ports down now, disconnecting their clients.
+    pub fn close(self) {
+        if let Some(k) = self.kiss {
+            k.close();
+        }
+        self.host.close();
+    }
+
     pub fn restart_requested(&self) -> bool {
         self.restart
     }
@@ -287,9 +295,7 @@ impl<M: Modem> Tnc<M> {
     }
 
     fn echo(&self, s: &str) {
-        if self.echo || crate::log::to_file() {
-            crate::log::line(self.echo, format_args!("{:10.3} {s}", secs(self.station.now())));
-        }
+        crate::log::line(self.echo, format_args!("{:10.3} {s}", secs(self.station.now())));
     }
 
     fn trace(&self, s: &str) {

@@ -13,9 +13,9 @@ pub mod ptt;
 pub mod record;
 pub mod resample;
 pub mod signals;
-pub mod station;
-pub mod tnc;
 pub mod wav;
+
+pub use xara_modem::{station, tnc};
 
 pub const DEFAULT_ADDR: &str = xara_host::server::DEFAULT_ADDR;
 pub const HF_SPAN_HZ: u32 = 3000;

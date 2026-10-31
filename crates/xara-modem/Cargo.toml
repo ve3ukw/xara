@@ -1,0 +1,16 @@
+[package]
+name = "xara-modem"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+description = "Audio-free VARA-compatible HF/FM station and TNC for the xara modem: feed it 48 kHz audio blocks, get audio and PTT back."
+
+[dependencies]
+xara-phy.workspace = true
+xara-arq.workspace = true
+xara-host.workspace = true
+xara-ui.workspace = true

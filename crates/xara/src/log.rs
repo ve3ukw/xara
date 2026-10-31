@@ -15,6 +15,7 @@ pub fn init(name: &'static str, quiet: bool) {
     let _ = NAME.set(name);
     QUIET.store(quiet, Ordering::Relaxed);
     xara_host::set_log(say);
+    xara_modem::log::set_log(line);
 }
 
 pub fn open(path: &Path) -> io::Result<()> {
