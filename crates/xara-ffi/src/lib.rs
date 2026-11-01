@@ -137,6 +137,8 @@ fn build(cfg: &Config) -> Result<Handle, String> {
     if let Some(k) = kiss {
         with_tnc!(&mut inner, t => t.set_kiss(k));
     }
+    // the console lines of the CLI (without --quiet), which LOG_INFO promises
+    with_tnc!(&mut inner, t => t.set_echo(true));
     Ok(Handle { inner, ports: (cmd, data, kiss_port), x: Vec::new(), y: Vec::new(), failed: false })
 }
 
