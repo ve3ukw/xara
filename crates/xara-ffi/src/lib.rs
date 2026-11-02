@@ -73,6 +73,7 @@ pub struct Status {
     pub cmd_port: u16,
     pub data_port: u16,
     pub kiss_port: u16,
+    pub p2p: bool,
 }
 
 enum Inner {
@@ -328,10 +329,17 @@ pub unsafe extern "C" fn xara_get_status(m: *const Handle, st: *mut Status) {
     let Some(st) = (unsafe { st.as_mut() }) else { return };
     let Some(ports) = (unsafe { m.as_ref() }).map(|m| m.ports) else { return };
     // only reads, but a panic still marks the modem failed
-    let link = guarded(m.cast_mut(), |m| with_tnc!(&m.inner, t => t.station().link()));
+    let link = guarded(m.cast_mut(), |m| {
+        // the host's P2P SESSION / WINLINK SESSION, which only the HF station keeps
+        let p2p = match &m.inner {
+            Inner::Hf(t) => t.station().config().p2p,
+            Inner::Fm(_) => false,
+        };
+        (with_tnc!(&m.inner, t => t.station().link()), p2p)
+    });
     *st = unsafe { std::mem::zeroed() };
     (st.cmd_port, st.data_port, st.kiss_port) = ports;
-    let Some(link) = link else {
+    let Some((link, p2p)) = link else {
         copy_str(&mut st.state, "Error");
         st.afc_hz = f64::NAN;
         return;
@@ -343,6 +351,7 @@ pub unsafe extern "C" fn xara_get_status(m: *const Handle, st: *mut Status) {
     st.attempts = link.attempts;
     (st.passband_lo, st.passband_hi) = link.passband;
     st.afc_hz = link.afc_hz.unwrap_or(f64::NAN);
+    st.p2p = p2p;
 }
 
 type LogFn = unsafe extern "C" fn(*mut c_void, c_int, *const c_char);

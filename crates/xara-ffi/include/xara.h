@@ -84,6 +84,7 @@ typedef struct {
     uint16_t cmd_port;     /* bound ports (useful with cmd_port 0) */
     uint16_t data_port;
     uint16_t kiss_port;
+    bool p2p;              /* HF: the host asked for a P2P SESSION (else a Winlink session); always false in FM */
 } xara_status;
 
 /* After an internal error state is "Error" and only the ports are filled in. */

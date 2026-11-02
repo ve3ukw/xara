@@ -177,3 +177,28 @@ fn registered_caller_is_seen_as_registered() {
     let (_, seen_b) = connect_back_to_back(true);
     assert!(seen_b.contains("LINK REGISTERED"), "B saw {seen_b:?}");
 }
+
+#[test]
+fn status_follows_the_session_type() {
+    let m = create(&config(c"N0CALL", Mode::Hf2300)).unwrap();
+    let mut c = command(status(m).cmd_port);
+    let (x, mut y) = (vec![0.0f32; 480], vec![0.0f32; 480]);
+    // the modem takes host commands as it runs
+    let mut wait_for = |p2p: bool| {
+        for _ in 0..200 {
+            unsafe { xara_process(m, x.as_ptr(), y.as_mut_ptr(), x.len()) };
+            if status(m).p2p == p2p {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        false
+    };
+    assert!(!status(m).p2p, "a new modem is in a Winlink session");
+    c.write_all(b"P2P SESSION\r").unwrap();
+    assert!(wait_for(true), "P2P SESSION not seen");
+    c.write_all(b"WINLINK SESSION\r").unwrap();
+    assert!(wait_for(false), "WINLINK SESSION not seen");
+    drop(c);
+    unsafe { xara_destroy(m) };
+}
