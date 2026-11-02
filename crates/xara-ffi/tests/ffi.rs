@@ -125,9 +125,11 @@ fn poll(s: &mut TcpStream, seen: &mut String) {
     }
 }
 
-#[test]
-fn two_modems_connect_back_to_back() {
-    let a = create(&config(c"N0AAA", Mode::Hf2300)).unwrap();
+// Connects A (registered or not) to B back to back, and returns what their hosts saw
+fn connect_back_to_back(registered: bool) -> (String, String) {
+    let mut c = config(c"N0AAA", Mode::Hf2300);
+    c.registered = registered;
+    let a = create(&c).unwrap();
     let b = create(&config(c"N0BBB", Mode::Hf2300)).unwrap();
     let (mut ca, mut cb) = (command(status(a).cmd_port), command(status(b).cmd_port));
     let (mut seen_a, mut seen_b) = (String::new(), String::new());
@@ -161,4 +163,17 @@ fn two_modems_connect_back_to_back() {
         xara_destroy(a);
         xara_destroy(b);
     }
+    (seen_a, seen_b)
+}
+
+#[test]
+fn two_modems_connect_back_to_back() {
+    let (_, seen_b) = connect_back_to_back(false);
+    assert!(seen_b.contains("LINK UNREGISTERED"), "B saw {seen_b:?}");
+}
+
+#[test]
+fn registered_caller_is_seen_as_registered() {
+    let (_, seen_b) = connect_back_to_back(true);
+    assert!(seen_b.contains("LINK REGISTERED"), "B saw {seen_b:?}");
 }

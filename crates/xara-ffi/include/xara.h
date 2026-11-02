@@ -45,9 +45,11 @@ typedef struct {
     int64_t tx_latency;    /* samples from xara_process() output to RF, including PTT lead */
     int64_t rx_lag;        /* samples from RF to xara_process() input */
     int64_t ptt_tail;      /* samples PTT is held after the last TX sample */
+    bool registered;       /* registered mode: the higher speed levels and compression, for a station with
+                              a registered copy of VARA for its call; peers see the station as registered */
 } xara_config;
 
-/* Fills cfg with the defaults: HF 2300, 127.0.0.1:8300, KISS 8100, -5 dB, no latency. */
+/* Fills cfg with the defaults: HF 2300, 127.0.0.1:8300, KISS 8100, -5 dB, no latency, unregistered. */
 void xara_config_default(xara_config *cfg);
 
 /* Returns NULL on error, with a message in err (if err_len > 0). */

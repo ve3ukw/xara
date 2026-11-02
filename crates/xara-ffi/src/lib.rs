@@ -57,6 +57,7 @@ pub struct Config {
     pub tx_latency: i64,
     pub rx_lag: i64,
     pub ptt_tail: i64,
+    pub registered: bool,
 }
 
 #[repr(C)]
@@ -122,14 +123,20 @@ fn build(cfg: &Config) -> Result<Handle, String> {
         _ => None,
     };
     let mut inner = match fm_bw {
-        Some(bw) => Inner::Fm(Box::new(Tnc::new(station::fm::Station::new(fm::Config::new(bw, &call), opts), host))),
+        Some(bw) => {
+            let mut c = fm::Config::new(bw, &call);
+            c.host.registered = cfg.registered;
+            Inner::Fm(Box::new(Tnc::new(station::fm::Station::new(c, opts), host)))
+        }
         None => {
             let bw = match mode {
                 Mode::Hf500 => Bandwidth::Hz500,
                 Mode::Hf2750 => Bandwidth::Hz2750,
                 _ => Bandwidth::Hz2300,
             };
-            let mut st = station::hf::Station::new(hf::Config::new(bw, &call), opts);
+            let mut c = hf::Config::new(bw, &call);
+            c.host.registered = cfg.registered;
+            let mut st = station::hf::Station::new(c, opts);
             st.set_persistence(xara_arq::hf::broadcast::DEFAULT_PERSISTENCE);
             Inner::Hf(Box::new(Tnc::new(st, host)))
         }
@@ -197,6 +204,7 @@ pub unsafe extern "C" fn xara_config_default(cfg: *mut Config) {
             tx_latency: 0,
             rx_lag: 0,
             ptt_tail: 0,
+            registered: false,
         });
     }
 }
